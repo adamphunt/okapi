@@ -13,7 +13,7 @@ from luigi.parameter import Parameter
 __author__ = 'linas'
 
 import logging, os, urllib, zipfile
-import luigi, luigi.hadoop_jar, luigi.hdfs
+import luigi, luigi.contrib.hadoop_jar, luigi.contrib.hdfs
 import tempfile
 
 #all available methods and theri Computation classes, add your here if you have a new one.
@@ -64,16 +64,16 @@ class PrepareMovielensData(luigi.Task):
         return DownloadMovielens()
 
     def output(self):
-        return [luigi.hdfs.HdfsTarget('movielens.testing_{0}'.format(self.fraction)),
-                luigi.hdfs.HdfsTarget('movielens.training_{0}'.format(self.fraction)),
-                luigi.hdfs.HdfsTarget('movielens.training.info_{0}'.format(self.fraction)),
-                luigi.hdfs.HdfsTarget('movielens.validation_{0}'.format(self.fraction))]
+        return [luigi.contrib.hdfs.HdfsTarget('movielens.testing_{0}'.format(self.fraction)),
+                luigi.contrib.hdfs.HdfsTarget('movielens.training_{0}'.format(self.fraction)),
+                luigi.contrib.hdfs.HdfsTarget('movielens.training.info_{0}'.format(self.fraction)),
+                luigi.contrib.hdfs.HdfsTarget('movielens.validation_{0}'.format(self.fraction))]
 
     def local_output(self):
-        return [luigi.file.File(tempfile.gettempdir()+'/movielens.testing_{0}'.format(self.fraction)),
-                luigi.file.File(tempfile.gettempdir()+'/movielens.training_{0}'.format(self.fraction)),
-                luigi.file.File(tempfile.gettempdir()+'/movielens.training.info_{0}'.format(self.fraction)),
-                luigi.file.File(tempfile.gettempdir()+'/movielens.validation_{0}'.format(self.fraction))]
+        return [luigi.local_target.LocalTarget(tempfile.gettempdir()+'/movielens.testing_{0}'.format(self.fraction)),
+                luigi.local_target.LocalTarget(tempfile.gettempdir()+'/movielens.training_{0}'.format(self.fraction)),
+                luigi.local_target.LocalTarget(tempfile.gettempdir()+'/movielens.training.info_{0}'.format(self.fraction)),
+                luigi.local_target.LocalTarget(tempfile.gettempdir()+'/movielens.validation_{0}'.format(self.fraction))]
 
 
     def _get_id(self, original_id, dictionary):
@@ -93,7 +93,7 @@ class PrepareMovielensData(luigi.Task):
         f = self.input().open('r') # this will return a file stream that reads from movielens ratings.dat
         training = self.local_output()[1].open('w')
 
-        hdfs_client = luigi.hdfs.HdfsClient()
+        hdfs_client = luigi.contrib.hdfs.HdfsClient()
 
         #lets first write training set and store in memory user and item indexes
         testing_validation = []
@@ -143,14 +143,14 @@ class DeleteDir(luigi.Task):
 
     def run(self):
         logger.debug("Checking if {0} is available".format(self.dir))
-        if luigi.hdfs.exists(self.dir):
+        if luigi.contrib.hdfs.exists(self.dir):
             logger.debug("Removing {0}.".format(self.dir))
-            luigi.hdfs.remove(self.dir)
+            luigi.contrib.hdfs.remove(self.dir)
 
     def complete(self):
-        return not luigi.hdfs.exists(self.dir)
+        return not luigi.contrib.hdfs.exists(self.dir)
 
-class OkapiTrainModelTask(luigi.hadoop_jar.HadoopJarJobTask):
+class OkapiTrainModelTask(luigi.contrib.hadoop_jar.HadoopJarJobTask):
     '''Trains a model'''
 
     fraction = luigi.Parameter(description="The fraction of data we want to use", default=1.0)
@@ -162,7 +162,7 @@ class OkapiTrainModelTask(luigi.hadoop_jar.HadoopJarJobTask):
         return PrepareMovielensData(self.fraction)
 
     def output(self):
-        return luigi.hdfs.HdfsTarget(self.out_hdfs)
+        return luigi.contrib.hdfs.HdfsTarget(self.out_hdfs)
 
     def _get_conf(self, section, name):
         return luigi.configuration.get_config().get(section, name)
@@ -292,7 +292,7 @@ class EvaluateTask(OkapiTrainModelTask):
                 OkapiTrainModelTask(self.fraction, self.model_name, self.model_name+"_model")]
 
     def output(self):
-        return luigi.hdfs.HdfsTarget(self.out_hdfs)
+        return luigi.contrib.hdfs.HdfsTarget(self.out_hdfs)
 
     def args(self):
         return [
@@ -339,7 +339,7 @@ class SpitPrecision(luigi.Task):
         return False
 
     def run(self):
-        f = luigi.hdfs.HdfsTarget(self.model_name+'_precision_*').open()
+        f = luigi.contrib.hdfs.HdfsTarget(self.model_name+'_precision_*').open()
         for line in f:
 	  numusers, sumaccuracy, avgaccuracy = line.split()
 	  print "Model accuracy: {0}".format(avgaccuracy)
